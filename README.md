@@ -150,34 +150,32 @@ https://bugzilla.redhat.com/show_bug.cgi?id=1391992):
 * **os_require_quiesce=yes** # Accept requests to freeze/thaw
   filesystems, https://bugzilla.redhat.com/show_bug.cgi?id=1385748
 
-For details on the latter, see OpenStack Backup Alternatives.
-
 ## Guest Fault Recovery
 
 Comprehensive instance fault recovery, high availability, and service
 monitoring requires a layered approach which as a whole is out of scope
-for this document, below we iterate alternative applicable purely inside
-a guest (which can be thought as being the inner-most layer).
+for this document, below we iterate an alternative applicable entirely
+inside a guest (which can be thought as being the inner-most layer).
 
 The most often used fault recovery mechanisms for an instance are to
 recover from kernel crashes and to recover from guest hangs which do not
 necessarily involve kernel panic.
 
-In the rare case the guest kernel crashes, kexec/kdump will capture a
-kernel vmcore for further analysis and reboot the guest. For
-configuration details on this, see
+In the rare case the guest kernel crashes, _kdump_ will capture a kernel
+vmcore for further analysis and reboot the guest. For configuration
+details on this, see
 https://access.redhat.com/documentation/en-US/Red_Hat_Enterprise_Linux/7/html/Kernel_Crash_Dump_Guide/chap-installing-configuring-kdump.html.
 In case the vmcore is not wanted, kernel can be instructed to reboot
-after a kernel crash by setting the panic kernel parameter, for example
-_panic=1_.
+after a kernel crash by disabling the kdump service and setting the
+panic kernel parameter, for example _panic=1_.
 
 In order to reboot an instance after unexpected behavior, for example
-load being over a high threshold for a certain amount of time or a
+load being over a high threshold for a certain period of time or a
 complete system lockup without kernel panic, the watchdog service can be
 utilized. The following property needs to be defined for Glance images
 (or Nova flavors) to create the needed guest device and reset the guest
 on hang (other available actions are listed in
-http://docs.openstack.org/admin-guide/compute-flavors.html):
+https://docs.openstack.org/nova/latest/user/flavors.html):
 
 * **hw_watchdog_action=reset**
 
@@ -204,7 +202,7 @@ the following manual steps by the Cloud Provider are needed:
 
 * Locate the compute node where the VM instance is running
   * **openstack server list**
-  * **openstack server show _<VMID>_**
+  * **openstack server show _VMID_**
   * Note the _OS-EXT-SRV-ATTR_ lines containing information about the
     host/hypervisor name and instance internal name
     * The VM name will be something like _instance-000014a3_
@@ -230,8 +228,8 @@ boot, and activate the preferred profile:
 * **systemctl enable tuned**
 * **tuned-adm profile virtual-guest**
 
-The default IO scheduler of RHEL 7 (deadline) is most often suitable but
-in some cases noop might also perform well.
+The default IO scheduler of RHEL 7 (_deadline_) is most often suitable
+but in some cases _noop_ might also perform well.
 
 ## Guest Kernel virtio Drivers
 
@@ -259,7 +257,7 @@ Also see the DPDK section below.
 It should go without saying that right-sized instances should contain
 only the minimum amount of installed packages and run only the services
 needed. Of particular note, it is probably a good idea to install and
-enable the _irqbalance service_ as, although not absolutely necessary in
+enable the _irqbalance_ service as, although not absolutely necessary in
 all scenarios, its overhead is minimal and it should be used for example
 in SR-IOV setups (this way the same image can be used regardless of such
 lower level details).
@@ -287,18 +285,18 @@ especially in production.
 The SSH daemon should avoid DNS lookups to speed up establishing SSH
 connections. For this, consider using _UseDNS no_ in
 _/etc/ssh/sshd_config_ and adding _OPTIONS=-u0_ to _/etc/sysconfig/sshd_
-(see [sshd_config(5)](https://www.mankier.com/5/sshd_config) for details
-on these). Setting _GSSAPIAuthentication no_ could be considered if
-Kerberos is not in use. In case instances frequently connect to each
-other, the _ControlPersist_ / _ControlMaster_ options might be
-considered as well.
+(see [sshd_config(5)](https://www.mankier.com/5/sshd_config and
+[sshd(8)](https://www.mankier.com/8/sshd)) for details on these).
+Setting _GSSAPIAuthentication no_ could be considered if Kerberos is not
+in use. In case instances frequently connect to each other over SSH, the
+_ControlPersist_ / _ControlMaster_ options might be considered as well.
 
 Typically remote SSH access and console access via Horizon are enough
 for most use cases. During development phase direct console access from
 the Nova compute host may also be helpful, for this to work enable the
 _serial-getty@ttyS1.service_, allow root access via ttyS1 if needed by
 adding _ttyS1_ to _/etc/securetty_ and then access the guest console
-from the Nova compute with **virsh console _<id>_ --devname serial1**.
+from the Nova compute with **virsh console _id_ --devname serial1**.
 
 # Host/Guest Configuration and Optimization
 
@@ -322,8 +320,8 @@ step-by-step instructions how to achieve CPU pinning with NUMA
 awareness:
 http://redhatstackblog.redhat.com/2015/05/05/cpu-pinning-and-numa-topology-awareness-in-openstack-compute/.
 For additional options, see also the upstream documents
-http://docs.openstack.org/admin-guide/compute-flavors.html and
-http://docs.openstack.org/admin-guide/compute-cpu-topologies.html.
+https://docs.openstack.org/nova/latest/user/flavors.html and
+https://docs.openstack.org/nova/latest/admin/cpu-topologies.html.
 
 **Note!** The _isolcpus_ method described in the blog post is not valid
 any more (on RHEL 7.2+) for non-real-time use cases, a systemd based
@@ -334,15 +332,19 @@ _/etc/systemd/system.conf_:
 
 * **CPUAffinity = 0,4**
 
-To activate this change, the host must be rebooted. Use for example the top utility to verify that only the selected CPUs are used for system services after the reboot.
+To activate this change, the host must be rebooted. Use for example the
+[top(1)](https://www.mankier.com/1/top) utility to verify that only the
+selected CPUs are used for system services after the reboot.
 
-Then, on each compute node's nova.conf something like below needs to be added for CPU pinning (systemd and Nova CPU parameters should be consistent) and to enable NUMA aware scheduling:
+Then, on each compute node's _nova.conf_ something like below needs to
+be added for CPU pinning (systemd and Nova CPU parameters should be
+consistent) and to enable NUMA aware scheduling:
 
 * **vcpu_pin_set = 1,2,3,5,6,7**
 
 * **scheduler_default_filters = ...,NUMATopologyFilter,AggregateInstanceExtraSpecsFilter**
 
-The openstack-nova-compute service needs to be restarted after these
+The _openstack-nova-compute_ service needs to be restarted after these
 changes. To separate dedicated performance compute nodes and generic
 compute nodes, host aggregates can be used, please refer to the blog
 post for details on this.
@@ -363,9 +365,9 @@ step-by-step instructions how to configure Huge Pages:
 http://redhatstackblog.redhat.com/2015/09/15/driving-in-the-fast-lane-huge-page-support-in-openstack-compute/.
 
 The blog post contains an example how to reserve Huge Pages on the host
-kernel. In case some of the host memory and its Huge Pages should
+kernel. In case some of the host memory and its Huge Pages should be
 reserved for system processes, this can be achieved with the following
-kind nova.conf parameters:
+kind _nova.conf_ parameters:
 
 * **reserved_host_memory_mb = 2048**
 * **reserved_huge_pages = node=0, size=2048, count=64**
@@ -420,17 +422,17 @@ https://access.redhat.com/documentation/en-US/Red_Hat_Enterprise_Linux/7/html/Vi
 
 PCI passthough / SR-IOV should be considered for generic workloads and
 higher-level VNFs if other options like OVS-DPDK (see below) are not
-suitable when trying to achieve the required performance level. However,
-under certain circumstances a Cloud Provider may urge to support SR-IOV
-due to resource policies on compute nodes so although not applicable for
-most use cases this might still be something that should be prepared for
-in VNF Cloud Deliveries. On recent RHEL versions, the CPU partitioning /
-NFV tuned profiles should be evaluated as well.
+suitable when trying to achieve the required level of performance.
+However, under certain circumstances a Cloud Provider may urge to
+support SR-IOV due to resource policies on compute nodes so although not
+applicable for most use cases this might still be something that should
+be prepared for in VNF Cloud Deliveries. On recent RHEL versions, the
+CPU partitioning / NFV tuned profiles should be evaluated as well.
 
 ### PCI Passthrough
 
 For configuration details, see
-http://docs.openstack.org/admin-guide/compute-pci-passthrough.html.
+https://docs.openstack.org/nova/latest/admin/pci-passthrough.html.
 
 ### SR-IOV
 
@@ -453,14 +455,14 @@ cloud/virtualization operations like live migration are still possible
 (with recent enough versions, meaning OVS-DPDK 2.6 / RH OSP 11 / RHEL
 7.4 or newer).
 
-Starting with RH OSP 10 and newer DPDK should be configured with
+Starting with RH OSP 10 and newer, DPDK should be configured with
 Director, as per https://access.redhat.com/solutions/2930291.
 
 3rd party solutions exist to handle more complex (telecom) protocols and
 advanced routing scenarios with DPDK PMD used by a guest _application_
-to bypass both the hypervisor and the guest OS. As this scenario
+to bypass both the hypervisor and the guest OS. Since this scenario
 requires application level support, this kind of solution is out of the
-scope for more general applications and VNFs.
+scope for less specialized applications and VNFs.
 
 For more detailed explanation of virtio-net / vhost-net / vhost-user and
 differences between these, see for example
@@ -494,7 +496,7 @@ On a guest instantiated from such an image the NIC channel setup can be
 checked and changed as needed with the commands below:
 
 * **ethtool -l eth0**
-* **ethtool -L eth0 combined _<nr-of-queues>_** # Should match the number
+* **ethtool -L eth0 combined _nr-of-queues_** # Should match the number
   of available CPUs
 
 Note that on recent kernels with [this RFE
